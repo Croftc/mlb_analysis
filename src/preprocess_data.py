@@ -63,8 +63,6 @@ def clean_and_split(df, inference=False):
 
     return pitchers_df, batters_df
 
-
-
 def normalize_and_index(pitchers_df, batters_df, pitcher_scaler=None, batter_scaler=None):
     pitchers_df['DATE'] = pd.to_datetime(pitchers_df['DATE'])
     pitchers_df = assign_game_index(pitchers_df)
@@ -118,10 +116,29 @@ def align_opps(pitchers_df, batters_df):
     batters_df['opp_starting_pitcher'] = batters_df['opp_starting_pitcher'].astype(int)
     return pitchers_df, batters_df
 
+# New function: Add exponential moving average (EMA) features
+def add_ema_features(df, features, span=5):
+    """
+    Calculate the exponential moving average (EMA) for each feature in `features` over a given span.
+    The EMA is calculated per player using the 'PLAYER-ID' column.
+    A new column is added for each feature with the suffix '_ema'.
+    """
+    for feat in features:
+        # Group by player and calculate the EMA over the sorted games (assumes DATE is sorted already)
+        df[feat + '_ema'] = df.groupby('PLAYER-ID')[feat].transform(lambda x: x.ewm(span=span, adjust=False).mean())
+    return df
 
-# pipeline these functions
-def preprocess(df, pitcher_scaler=None, batter_scaler=None, inference=False):
+# Pipeline these functions, including the new EMA calculation.
+def preprocess(df, pitcher_scaler=None, batter_scaler=None, inference=False, ema_span=5):
+    # Clean and split the data into pitchers and batters.
     pitchers_df, batters_df = clean_and_split(df, inference=inference)
+    # Normalize features and assign game index.
     pitchers_df, batters_df = normalize_and_index(pitchers_df, batters_df, pitcher_scaler, batter_scaler)
+    
+    # Add EMA features for the continuous columns.
+    pitchers_df = add_ema_features(pitchers_df, continuous_pitcher, span=ema_span)
+    batters_df = add_ema_features(batters_df, continuous_batter, span=ema_span)
+    
+    # Align opposing starting pitcher information.
     pitchers_df, batters_df = align_opps(pitchers_df, batters_df)
     return pitchers_df, batters_df
